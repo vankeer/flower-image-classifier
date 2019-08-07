@@ -3,16 +3,16 @@ import torch
 from torchvision import datasets, transforms, models
 from torch import nn
 from torch import optim
-import torch.nn.functional as F
+#import torch.nn.functional as F
 import time
 from PIL import Image
-import matplotlib.pyplot as plt
-import seaborn as sns
 import json
 from collections import OrderedDict
+import base64
+from io import BytesIO
 
 def load_train_data(train_dir):
-    print(f"Loading training data from: {train_dir}")
+    print('Loading training data from: {}'.format(train_dir))
     t = transforms.Compose([
         transforms.Resize(224),
         transforms.CenterCrop(224),
@@ -26,7 +26,7 @@ def load_train_data(train_dir):
     return dataset, dataloader
 
 def load_valid_data(valid_dir):
-    print(f"Loading validation data from: {valid_dir}")
+    print('Loading validation data from: {}'.format(valid_dir))
     t = transforms.Compose([
         transforms.Resize(224),
         transforms.CenterCrop(224),
@@ -38,7 +38,7 @@ def load_valid_data(valid_dir):
     return dataset, dataloader
 
 def load_test_data(test_dir):
-    print(f"Loading testing data from: {test_dir}")
+    print('Loading testing data from: {}'.format(test_dir))
     t = transforms.Compose([
         transforms.Resize(224),
         transforms.CenterCrop(224),
@@ -49,16 +49,16 @@ def load_test_data(test_dir):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=50, shuffle=True)
     return dataset, dataloader
 
-def create_network(arch='vgg13', hidden_units=512):
-    print(f"Create network based on model: {arch}")
+def create_network(arch='vgg13', hidden_units=512, pretrained=True):
+    print('Create network based on model: {}'.format(arch))
 
     # Load model
     if arch == 'vgg13':
-        model = models.vgg13(pretrained=True)
+        model = models.vgg13(pretrained=pretrained)
     elif arch == 'vgg16':
-        model = models.vgg16(pretrained=True)
+        model = models.vgg16(pretrained=pretrained)
     elif arch == 'alexnet':
-        model = models.alexnet(pretrained=True)
+        model = models.alexnet(pretrained=pretrained)
     # TODO add other models here - https://pytorch.org/docs/master/torchvision/models.html
 
     # Freeze parameters so we don't backprop through them
@@ -77,37 +77,37 @@ def create_network(arch='vgg13', hidden_units=512):
     return model
 
 def create_criterion():
-    print("Creating criterion NLLLoss")
+    print('Creating criterion NLLLoss')
     return nn.NLLLoss()
 
 def create_optimizer(model, lr):
-    print(f"Creating optimizer with LR {lr}")
+    print('Creating optimizer with LR {}'.format(lr))
     return optim.Adam(model.classifier.parameters(), lr=lr)
 
 def load_device(use_gpu=False):
     if use_gpu:
         if torch.cuda.is_available():
-            print("Using GPU")
-            device = torch.device("cuda:0")
+            print('Using GPU')
+            device = torch.device('cuda:0')
         else:
-            print("GPU not available - falling back to CPU")
-            device = torch.device("cpu")
+            print('GPU not available - falling back to CPU')
+            device = torch.device('cpu')
     else:
-        print("Using CPU")
-        device = torch.device("cpu")
+        print('Using CPU')
+        device = torch.device('cpu')
     return device
 
 def train_model(model, criterion, optimizer, train_dataloader, valid_dataloader, epochs, use_gpu=True):
     # Set device
     device = load_device(use_gpu)
-    model.to(device)
+    model.to(device=device)
 
     # For debugging purposes only
     # Set to 0 to train/validate on all available images
     #max_images = 0
 
     print_every = 32
-    print(f"Training for {epochs} epochs, updating every {print_every} training images")
+    print('Training for {} epochs, updating every {} training images'.format(epochs, print_every))
 
     # Training the network
     for e in range(epochs):
@@ -152,11 +152,11 @@ def train_model(model, criterion, optimizer, train_dataloader, valid_dataloader,
                         equals = top_class == labels.view(*top_class.shape)
                         accuracy += torch.mean(equals.type(torch.FloatTensor))
 
-                print("Epoch: {}/{}.. ".format(e+1, epochs),
-                      "Epoch time: {:.2f} sec.. ".format(time.time() - start),
-                      "Training Loss: {:.3f}.. ".format(running_loss/len(train_dataloader)),
-                      "Validation Loss: {:.3f}.. ".format(validation_loss/len(valid_dataloader)),
-                      "Accuracy: {:.3f}".format(accuracy/len(valid_dataloader)))
+                print('Epoch: {}/{}.. '.format(e+1, epochs),
+                      'Epoch time: {:.2f} sec.. '.format(time.time() - start),
+                      'Training Loss: {:.3f}.. '.format(running_loss/len(train_dataloader)),
+                      'Validation Loss: {:.3f}.. '.format(validation_loss/len(valid_dataloader)),
+                      'Accuracy: {:.3f}'.format(accuracy/len(valid_dataloader)))
 
                 model.train()
 
@@ -169,13 +169,16 @@ def save_checkpoint(model, arch, hidden_units, train_dataset, save_dir):
         'state_dict': model.state_dict(),
         'arch': arch,
         'hidden_units': hidden_units
-    }, save_dir + "/model_" + arch + "_" + str(hidden_units) + ".pth")
+    }, save_dir + '/model_' + arch + '_' + str(hidden_units) + '.pth')
 
-def load_checkpoint(filepath):
-    checkpoint = torch.load(filepath)
-    model = create_network(checkpoint['arch'], checkpoint['hidden_units'])
+def load_checkpoint(filepath, use_gpu=False):
+    device = load_device(use_gpu)
+    torch.device(device)
+    checkpoint = torch.load(filepath, map_location=device)
+    model = create_network(checkpoint['arch'], checkpoint['hidden_units'], False)
     model.load_state_dict(checkpoint['state_dict'])
     model.class_to_idx = checkpoint['class_to_idx']
+    model.to(device=device)
     return model
 
 def load_cat_to_name(filepath):
@@ -183,12 +186,19 @@ def load_cat_to_name(filepath):
         cat_to_name = json.load(f)
     return cat_to_name
 
-def process_image(image_path):
+def open_image_path(image_path):
+    img = Image.open(image_path)
+    print('Processing image: ' + str(image_path))
+    return img
+
+def open_image_base64(image_base64):
+    img = Image.open(BytesIO(base64.b64decode(image_base64)))
+    return img
+
+def process_image(img):
     ''' Scales, crops, and normalizes a PIL image for a PyTorch model,
         returns an Numpy array
     '''
-    img = Image.open(image_path)
-    print("Processing image: " + str(image_path))
     w, h = img.size
 
     # resize
@@ -208,7 +218,7 @@ def process_image(image_path):
     img = img.crop((left, top, right, bottom))
 
     # normalize color channels
-    np_img = np.array(img) / 255
+    np_img = np.array(img, dtype=np.float32) / 255
     np_img -= np.array ([0.485, 0.456, 0.406]) 
     np_img /= np.array ([0.229, 0.224, 0.225])
 
@@ -216,30 +226,36 @@ def process_image(image_path):
 
     return np_img
 
-def predict(image_path, model, topk=3, use_gpu=False):
+def predict(np_image, model, topk=3, use_gpu=False):
     ''' Predict the class (or classes) of an image using a trained deep learning model.
     '''
     # Set device
+    print('Setting device')
     device = load_device(use_gpu)
-    model.to(device)
+    model.to(device=device)
 
     # Process image
-    image = process_image(image_path)
-    image = torch.from_numpy(image).type(torch.FloatTensor)
+    print('Processing image')
+    image = torch.from_numpy(np_image).to(device=device)
+    # Note: the Docker container process hanged on the next line.
+    # So instead I did the conversion to floats during the creation of the np array.
+    #image = image.type(torch.FloatTensor, True)
     image.unsqueeze_(dim = 0) # batch dimension
-    image = image.to(device)
 
-    # Set model
-    model.to(device)
+    # Set eval mode on
     model.eval()
 
     # Run model
+    print('Running model')
+    # TODO Docker container hangs after the next line - why?
     outputs = model.forward(image)
 
     # Reset to train mode
+    print('Reset to training mode')
     model.train()
 
     # Get probabilities
+    print('Getting probabilities')
     probabilities = torch.exp(outputs)
     probs, labels = probabilities.topk(topk)
 
@@ -253,5 +269,5 @@ def predict(image_path, model, topk=3, use_gpu=False):
     }
 
     top_labels = [idx_to_class[idx] for idx in top_labels_idx]
-    
+
     return probs[:topk], top_labels[:topk]

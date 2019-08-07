@@ -23,7 +23,7 @@ valid_dataset, valid_dataloader = flower_classifier.load_valid_data(args.data_di
 test_dataset, test_dataloader = flower_classifier.load_test_data(args.data_dir + "/test/")
 
 # Create the network
-model = flower_classifier.create_network(args.arch, args.hidden_units)
+model = flower_classifier.create_network(args.arch, args.hidden_units, True)
 if args.checkpoint:
     model = flower_classifier.load_checkpoint(args.checkpoint)
 criterion = flower_classifier.create_criterion()

@@ -1,0 +1,15 @@
+name: fic
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - flask=1.1.1
+  - numpy=1.16.4
+  - numpy-base=1.16.4
+  - pillow=6.1.0
+  - python==3.6.9
+  - pytorch=1.1.0
+  - torchvision=0.3.0
+  - pip:
+    - pip==19.2.1
+prefix: //anaconda3/envs/fic

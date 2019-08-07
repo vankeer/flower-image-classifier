@@ -15,10 +15,14 @@ args = parser.parse_args()
 print(args)
 
 # Load the model
-model = flower_classifier.load_checkpoint(args.checkpoint)
+model = flower_classifier.load_checkpoint(args.checkpoint, args.gpu)
+
+# Process image
+img = flower_classifier.open_image_path(args.image_path)
+image = flower_classifier.process_image(img)
 
 # Do prediction
-probs, labels = flower_classifier.predict(args.image_path, model, args.top_k, args.gpu)
+probs, labels = flower_classifier.predict(image, model, args.top_k, args.gpu)
 
 # Get label names
 cat_to_name = flower_classifier.load_cat_to_name(args.category_names)
